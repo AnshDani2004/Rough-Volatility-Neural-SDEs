@@ -157,5 +157,98 @@ class TestGenerateFbmPaths:
         assert np.allclose(paths[:, 0], 0), "Paths should start at zero"
 
 
+class TestDistributionalProperties:
+    """Statistical tests for fBM distributional properties."""
+    
+    def test_terminal_variance_scaling(self):
+        """
+        Verify Var(B^H_T) ≈ T^{2H} at terminal time.
+        
+        This is a key mathematical property: the variance of fBM at time T
+        equals T^{2H}.
+        """
+        from scipy import stats
+        
+        n_steps = 256
+        batch_size = 5_000
+        T = 1.0
+        
+        for H in [0.1, 0.25, 0.4]:
+            paths = generate_fbm_paths(n_steps=n_steps, batch_size=batch_size, H=H, T=T)
+            terminal_values = paths[:, -1]
+            
+            # Theoretical variance: T^{2H}
+            theoretical_var = T ** (2 * H)
+            empirical_var = np.var(terminal_values)
+            
+            relative_error = abs(empirical_var - theoretical_var) / theoretical_var
+            
+            assert relative_error < 0.05, (
+                f"Terminal variance for H={H}: empirical={empirical_var:.4f}, "
+                f"theoretical={theoretical_var:.4f}, error={relative_error:.2%}"
+            )
+    
+    def test_increment_covariance(self):
+        """
+        Test that increment covariance matches fBM theory.
+        
+        For fBM: Cov(B^H_s, B^H_t) = 0.5 * (s^{2H} + t^{2H} - |t-s|^{2H})
+        """
+        n_steps = 128
+        batch_size = 5_000
+        H = 0.25
+        T = 1.0
+        
+        paths = generate_fbm_paths(n_steps=n_steps, batch_size=batch_size, H=H, T=T)
+        
+        # Test covariance at mid and final time
+        t_idx = n_steps  # Terminal
+        s_idx = n_steps // 2  # Midpoint
+        
+        t = T
+        s = T / 2
+        
+        # Theoretical covariance
+        theoretical_cov = 0.5 * (s**(2*H) + t**(2*H) - abs(t-s)**(2*H))
+        
+        # Empirical covariance
+        empirical_cov = np.cov(paths[:, s_idx], paths[:, t_idx])[0, 1]
+        
+        relative_error = abs(empirical_cov - theoretical_cov) / abs(theoretical_cov)
+        
+        assert relative_error < 0.10, (
+            f"Covariance test: empirical={empirical_cov:.4f}, "
+            f"theoretical={theoretical_cov:.4f}, error={relative_error:.2%}"
+        )
+    
+    def test_increment_normality(self):
+        """
+        Test that fBM increments are approximately Gaussian.
+        
+        Uses Kolmogorov-Smirnov test with p > 0.01 threshold.
+        """
+        from scipy import stats
+        
+        n_steps = 256
+        batch_size = 1_000
+        H = 0.1
+        T = 1.0
+        
+        dh = DaviesHarte(n_steps=n_steps, batch_size=batch_size, H=H, T=T)
+        increments = dh.sample()
+        
+        # Flatten and standardize
+        flat_incr = increments.flatten()
+        standardized = (flat_incr - np.mean(flat_incr)) / np.std(flat_incr)
+        
+        # KS test against standard normal
+        statistic, p_value = stats.kstest(standardized, 'norm')
+        
+        # p > 0.01 means we cannot reject normality
+        assert p_value > 0.01, (
+            f"Normality test failed: KS stat={statistic:.4f}, p={p_value:.4f}"
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

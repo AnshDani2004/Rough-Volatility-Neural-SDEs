@@ -199,5 +199,104 @@ class TestComputePnL:
         assert pnl.shape == (2,)
 
 
+class TestCVaRBatchConsistency:
+    """Test CVaR computation consistency across batches."""
+    
+    def test_cvar_batch_consistency(self):
+        """CVaR should give consistent results when computed on same data."""
+        from src.metrics.statistics import compute_cvar as compute_cvar_np
+        
+        # Generate fixed PnL data
+        np.random.seed(42)
+        pnl = np.random.randn(1000) * 0.05 + 0.02
+        
+        # Compute CVaR multiple times
+        cvar1, _ = compute_cvar_np(pnl, alpha=0.05)
+        cvar2, _ = compute_cvar_np(pnl, alpha=0.05)
+        cvar3, _ = compute_cvar_np(pnl, alpha=0.05)
+        
+        # Should be exactly the same (deterministic)
+        assert cvar1 == cvar2 == cvar3, "CVaR should be deterministic"
+    
+    def test_cvar_subsample_consistency(self):
+        """CVaR on large sample should be close to subsamples."""
+        from src.metrics.statistics import compute_cvar as compute_cvar_np
+        
+        np.random.seed(42)
+        pnl_full = np.random.randn(10000) * 0.05 + 0.02
+        
+        cvar_full, _ = compute_cvar_np(pnl_full, alpha=0.05)
+        
+        # Subsample CVaRs should be close
+        cvars = []
+        for i in range(5):
+            subset = pnl_full[i*2000:(i+1)*2000]
+            cvar, _ = compute_cvar_np(subset, alpha=0.05)
+            cvars.append(cvar)
+        
+        # Subsamples should be within 30% of full
+        for cvar in cvars:
+            rel_diff = abs(cvar - cvar_full) / abs(cvar_full)
+            assert rel_diff < 0.3, f"Subsample CVaR differs too much: {rel_diff:.2%}"
+
+
+class TestBaselineAgents:
+    """Test baseline hedging agents."""
+    
+    def test_bs_delta_hedge_output_shape(self):
+        """BS delta hedge should return correct shape."""
+        from src.agents.baselines import BlackScholesDeltaHedge
+        
+        agent = BlackScholesDeltaHedge(strike=1.0, sigma=0.2, T=1.0)
+        
+        paths = np.random.randn(50, 101) * 0.02 + 1.0
+        time_grid = np.linspace(0, 1, 101)
+        
+        deltas = agent.compute_deltas(paths, time_grid)
+        
+        assert deltas.shape == (50, 100), f"Expected (50, 100), got {deltas.shape}"
+    
+    def test_bs_delta_bounded(self):
+        """BS delta should be in [0, 1] for call option."""
+        from src.agents.baselines import BlackScholesDeltaHedge
+        
+        agent = BlackScholesDeltaHedge(strike=1.0, sigma=0.2, T=1.0)
+        
+        paths = np.abs(np.random.randn(50, 101)) * 0.5 + 0.5  # Positive prices
+        time_grid = np.linspace(0, 1, 101)
+        
+        deltas = agent.compute_deltas(paths, time_grid)
+        
+        assert deltas.min() >= 0.0, f"Delta below 0: {deltas.min()}"
+        assert deltas.max() <= 1.0, f"Delta above 1: {deltas.max()}"
+    
+    def test_naive_hedge_fixed_delta(self):
+        """Naive hedge with fixed delta should return constant."""
+        from src.agents.baselines import NaiveHedgeAgent
+        
+        agent = NaiveHedgeAgent(strategy="fixed", fixed_delta=0.6)
+        
+        paths = np.random.randn(30, 51) * 0.02 + 1.0
+        time_grid = np.linspace(0, 1, 51)
+        
+        deltas = agent.compute_deltas(paths, time_grid)
+        
+        assert np.allclose(deltas, 0.6), "Fixed delta should be constant"
+    
+    def test_heston_delta_output(self):
+        """Heston delta should produce valid output."""
+        from src.agents.baselines import HestonDeltaHedge
+        
+        agent = HestonDeltaHedge(strike=1.0, T=1.0)
+        
+        paths = np.abs(np.random.randn(20, 51)) * 0.3 + 0.8
+        time_grid = np.linspace(0, 1, 51)
+        
+        deltas = agent.compute_deltas(paths, time_grid)
+        
+        assert deltas.shape == (20, 50), f"Expected (20, 50), got {deltas.shape}"
+        assert deltas.min() >= 0.0, f"Heston delta below 0"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

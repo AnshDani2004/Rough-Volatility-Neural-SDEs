@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rough-volatility-neural-sde"
+version = "1.0.0"
+description = "Neural SDE framework for rough volatility modeling with deep hedging"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Ansh Dani"}
+]
+keywords = ["rough volatility", "neural SDE", "deep hedging", "fBM"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.21",
+    "scipy>=1.7",
+    "pandas>=1.3",
+    "matplotlib>=3.5",
+    "torch>=2.0",
+    "click>=8.0",
+    "tqdm>=4.60",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "black", "isort"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "experiments*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311"]
+
+[tool.isort]
+profile = "black"

@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: "Dani"
+    given-names: "Ansh"
+title: "Rough Volatility Neural SDEs"
+version: 1.0.0
+date-released: 2026-02-03
+url: "https://github.com/AnshDani2004/Rough-Volatility-Neural-SDEs"
+license: MIT
+type: software
+keywords:
+  - rough volatility
+  - neural SDE
+  - deep hedging
+  - fractional Brownian motion
