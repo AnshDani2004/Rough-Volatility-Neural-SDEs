@@ -7,6 +7,8 @@ from .statistics import (
     estimate_convergence_slope,
     compute_turnover,
     ks_test_normality,
+    bootstrap_paired_test,
+    compare_strategies,
 )
 
 __all__ = [
@@ -16,4 +18,6 @@ __all__ = [
     "estimate_convergence_slope",
     "compute_turnover",
     "ks_test_normality",
+    "bootstrap_paired_test",
+    "compare_strategies",
 ]

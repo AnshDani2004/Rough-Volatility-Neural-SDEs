@@ -1,34 +1,68 @@
 # Paper Results
 
-This directory maps CSV outputs to figures and tables in the paper.
+This directory maps experiment outputs to figures and tables in the paper.
 
-## Figure Mappings
+---
 
-| Figure | Source File | Script |
-|--------|-------------|--------|
-| Fig. 1: Convergence | `outputs/convergence_results.csv` | `experiments/run_convergence.py` |
-| Fig. 2: Hedging Comparison | `outputs/hedging_results.csv` | `experiments/run_hedging.py` |
-| Fig. 3: Bootstrap CIs | `outputs/bootstrap_ci.csv` | `experiments/run_bootstrap_ci.py` |
+## Sign Convention
 
-## Table Mappings
+**Positive PnL = Profit, Negative PnL = Loss**
 
-| Table | Source File | Description |
-|-------|-------------|-------------|
-| Table 1 | `outputs/hedging_results.csv` | Strategy comparison metrics |
-| Table 2 | `outputs/bootstrap_ci.csv` | 95% confidence intervals |
-| Table 3 | `outputs/convergence_results.csv` | Convergence slopes by H |
+CVaR (5%) represents the expected P&L in the worst 5% of scenarios. More negative CVaR indicates higher tail risk.
 
-## Regenerating Figures
+---
+
+## Table 1: Hedging Strategy Comparison
+
+*3,000 Monte Carlo paths, H = 0.1 (rough volatility), SEED = 42*
+
+| Strategy | Mean PnL | 95% CI | CVaR (5%) | 95% CI |
+|----------|----------|--------|-----------|--------|
+| BlackScholes Δ | −0.768 | [−0.779, −0.757] | −1.407 | [−1.433, −1.379] |
+| Heston Δ | −0.773 | [−0.783, −0.761] | −1.417 | [−1.443, −1.389] |
+| Naive (δ=0.5) | −0.005 | [−0.007, −0.002] | −0.190 | [−0.203, −0.177] |
+| Neural Hedge | −0.015 | [−0.020, −0.010] | −0.430 | [−0.455, −0.404] |
+
+*CIs computed via 2,000 bootstrap resamples.*
+
+---
+
+## Table 2: Hypothesis Tests (Neural vs Black-Scholes)
+
+*One-sided test: H₁ = Neural outperforms BS*
+
+| Metric | Difference | p-value | 95% CI |
+|--------|------------|---------|--------|
+| Mean PnL | +0.754 | < 0.001 *** | [+0.741, +0.766] |
+| CVaR (5%) | +0.976 | < 0.001 *** | [+0.938, +1.013] |
+
+*Significance: \* p<0.05, \*\* p<0.01, \*\*\* p<0.001*
+
+---
+
+## Figure Mapping
+
+| Figure | Source File | Command |
+|--------|-------------|---------|
+| Fig. 1: Convergence | `outputs/convergence_results.csv` | `python experiments/run_convergence.py` |
+| Fig. 2: Hedging Comparison | `outputs/hedging_results.csv` | `python experiments/run_hedging.py` |
+
+---
+
+## Regenerating Results
 
 ```bash
+# Full reproduction
+python experiments/run_hedging.py \
+    --paths 3000 \
+    --n-bootstrap 2000 \
+    --heston-params outputs/heston_params.json \
+    --out outputs/hedging_results.csv
+
+# Generate figures
 python scripts/plot_all_figures.py \
-    --convergence outputs/convergence_results.csv \
     --hedging outputs/hedging_results.csv \
-    --bootstrap outputs/bootstrap_ci.csv \
     --out figures/
 ```
 
-## Seed Information
-
-All results generated with `SEED=42` for reproducibility.
-See `REPRODUCE.md` for complete reproduction instructions.
+See `REPRODUCE.md` for complete instructions.

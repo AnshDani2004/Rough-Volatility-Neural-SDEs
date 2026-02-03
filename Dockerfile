@@ -1,8 +1,11 @@
+# Dockerfile for Rough Volatility Neural SDE
+# Provides exact reproducibility
+
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system deps
+# System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
@@ -11,14 +14,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source
+# Copy source code
 COPY . .
 
-# Install package in editable mode
-RUN pip install -e .
+# Install package
+RUN pip install --no-cache-dir -e .
 
-# Run smoke test
-RUN pytest tests/ -q --tb=no || echo "Tests completed"
+# Set reproducibility environment variables
+ENV CUBLAS_WORKSPACE_CONFIG=:4096:8
+ENV PYTHONHASHSEED=42
 
-# Default command
-CMD ["python", "experiments/run_convergence.py", "--quick", "--samples", "2"]
+# Verify installation
+RUN pytest tests/ -q --tb=no
+
+# Default command: run quick experiments
+CMD ["bash", "-c", "python experiments/run_convergence.py --quick && python experiments/run_hedging.py --quick"]

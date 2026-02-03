@@ -1,0 +1,15 @@
+{
+  "comparison": "NeuralHedge vs BlackScholesDelta",
+  "mean_pnl_diff": 0.7537829279899597,
+  "mean_pnl_pvalue": 0.0,
+  "mean_pnl_ci": [
+    0.7413227066397667,
+    0.7656734958291054
+  ],
+  "cvar_diff": 0.9764933288097382,
+  "cvar_pvalue": 0.0,
+  "cvar_ci": [
+    0.9379581369459629,
+    1.01318441927433
+  ]
+}

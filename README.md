@@ -82,12 +82,21 @@ fBM paths with $H=0.1$ exhibit the characteristic roughness observed in empirica
 ![fBM Comparison](figures/convergence_regimes.png)
 
 ### Deep Hedging Performance
-Neural hedge trained on rough paths outperforms Black-Scholes delta:
 
-| Strategy | Mean P&L | 5% CVaR |
-|----------|----------|---------|
-| BS Delta | 0.054 | 0.044 |
-| Neural | **0.071** | **0.060** |
+*3,000 Monte Carlo paths, 2,000 bootstrap resamples, SEED=42*
+
+**Sign convention:** Positive PnL = profit, negative = loss. CVaR (5%) = expected P&L in worst 5% of scenarios.
+
+| Strategy | Mean PnL | 95% CI | CVaR (5%) | 95% CI |
+|----------|----------|--------|-----------|--------|
+| BS Delta | −0.768 | [−0.779, −0.757] | −1.407 | [−1.433, −1.379] |
+| Heston Delta | −0.773 | [−0.783, −0.761] | −1.417 | [−1.443, −1.389] |
+| Naive (δ=0.5) | −0.005 | [−0.007, −0.002] | −0.190 | [−0.203, −0.177] |
+| **Neural Hedge** | **−0.015** | [−0.020, −0.010] | **−0.430** | [−0.455, −0.404] |
+
+**Statistical significance (Neural vs BS):**
+- Mean PnL difference: +0.754, p < 0.001 ***
+- CVaR difference: +0.976, p < 0.001 ***
 
 ## Testing
 

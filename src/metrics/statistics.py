@@ -252,3 +252,154 @@ def ks_test_normality(samples: np.ndarray) -> Tuple[float, float]:
     standardized = (samples - np.mean(samples)) / np.std(samples)
     statistic, p_value = stats.kstest(standardized, 'norm')
     return float(statistic), float(p_value)
+
+
+def bootstrap_paired_test(
+    pnl_a: np.ndarray,
+    pnl_b: np.ndarray,
+    stat_fn: Callable[[np.ndarray], float],
+    n_bootstrap: int = 1000,
+    seed: int = 42,
+    alternative: str = "two-sided"
+) -> Tuple[float, float, float, float]:
+    """
+    Bootstrap hypothesis test for paired strategy comparison.
+    
+    Tests H0: stat(A) = stat(B) vs H1: stat(A) ≠ stat(B) (or one-sided).
+    Uses paired bootstrap: resample pairs (a_i, b_i) together to preserve correlation.
+    
+    Parameters
+    ----------
+    pnl_a : np.ndarray
+        PnL values for strategy A (e.g., NeuralHedge).
+    pnl_b : np.ndarray
+        PnL values for strategy B (e.g., BlackScholes).
+    stat_fn : Callable
+        Statistic function (e.g., np.mean or lambda x: compute_cvar(x, 0.05)[0]).
+    n_bootstrap : int
+        Number of bootstrap samples.
+    seed : int
+        Random seed.
+    alternative : str
+        'two-sided', 'greater' (A > B), or 'less' (A < B).
+        
+    Returns
+    -------
+    diff : float
+        Observed difference stat(A) - stat(B).
+    p_value : float
+        P-value for the test.
+    ci_lower : float
+        Lower 95% CI for the difference.
+    ci_upper : float
+        Upper 95% CI for the difference.
+    """
+    if len(pnl_a) != len(pnl_b):
+        raise ValueError("PnL arrays must have same length for paired test")
+    
+    n = len(pnl_a)
+    rng = np.random.RandomState(seed)
+    
+    # Observed difference
+    obs_diff = stat_fn(pnl_a) - stat_fn(pnl_b)
+    
+    # Paired bootstrap: resample indices together
+    boot_diffs = []
+    for _ in range(n_bootstrap):
+        idx = rng.randint(0, n, size=n)
+        boot_a = pnl_a[idx]
+        boot_b = pnl_b[idx]
+        boot_diff = stat_fn(boot_a) - stat_fn(boot_b)
+        boot_diffs.append(boot_diff)
+    
+    boot_diffs = np.array(boot_diffs)
+    
+    # Center bootstrap distribution at zero for p-value calculation
+    # (null hypothesis: no difference)
+    centered_diffs = boot_diffs - np.mean(boot_diffs)
+    
+    # Compute p-value
+    if alternative == "two-sided":
+        p_value = np.mean(np.abs(centered_diffs) >= np.abs(obs_diff))
+    elif alternative == "greater":
+        # H1: A > B (diff > 0)
+        p_value = np.mean(centered_diffs >= obs_diff)
+    elif alternative == "less":
+        # H1: A < B (diff < 0)
+        p_value = np.mean(centered_diffs <= obs_diff)
+    else:
+        raise ValueError(f"Unknown alternative: {alternative}")
+    
+    # 95% CI for the difference (not centered)
+    ci_lower = np.percentile(boot_diffs, 2.5)
+    ci_upper = np.percentile(boot_diffs, 97.5)
+    
+    return float(obs_diff), float(p_value), float(ci_lower), float(ci_upper)
+
+
+def compare_strategies(
+    pnl_dict: dict,
+    baseline: str = "BlackScholesDelta",
+    n_bootstrap: int = 1000,
+    seed: int = 42
+):
+    """
+    Compare all strategies against a baseline using bootstrap tests.
+    
+    Parameters
+    ----------
+    pnl_dict : dict
+        Dictionary mapping strategy names to PnL arrays.
+    baseline : str
+        Baseline strategy to compare against.
+    n_bootstrap : int
+        Number of bootstrap samples.
+    seed : int
+        Random seed.
+        
+    Returns
+    -------
+    pd.DataFrame
+        Comparison results with differences, p-values, and CIs.
+    """
+    import pandas as pd
+    
+    if baseline not in pnl_dict:
+        raise ValueError(f"Baseline {baseline} not in pnl_dict")
+    
+    baseline_pnl = pnl_dict[baseline]
+    results = []
+    
+    for strategy, pnl in pnl_dict.items():
+        if strategy == baseline:
+            continue
+        
+        # Test for Mean PnL difference
+        mean_diff, mean_p, mean_ci_l, mean_ci_u = bootstrap_paired_test(
+            pnl, baseline_pnl, 
+            lambda x: np.mean(x),
+            n_bootstrap=n_bootstrap, seed=seed,
+            alternative="greater"  # H1: strategy better than baseline
+        )
+        
+        # Test for CVaR difference (higher CVaR = better, less tail risk)
+        cvar_diff, cvar_p, cvar_ci_l, cvar_ci_u = bootstrap_paired_test(
+            pnl, baseline_pnl,
+            lambda x: compute_cvar(x, 0.05)[0],
+            n_bootstrap=n_bootstrap, seed=seed,
+            alternative="greater"  # H1: strategy has higher CVaR (better)
+        )
+        
+        results.append({
+            "Strategy": strategy,
+            "vs_Baseline": baseline,
+            "MeanPnL_Diff": mean_diff,
+            "MeanPnL_pvalue": mean_p,
+            "MeanPnL_CI": f"[{mean_ci_l:+.4f}, {mean_ci_u:+.4f}]",
+            "CVaR_Diff": cvar_diff,
+            "CVaR_pvalue": cvar_p,
+            "CVaR_CI": f"[{cvar_ci_l:+.4f}, {cvar_ci_u:+.4f}]",
+        })
+    
+    return pd.DataFrame(results)
+
