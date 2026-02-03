@@ -415,3 +415,122 @@ class SignatureL2Loss(nn.Module):
         loss = torch.sum((real_sigs.mean(dim=0) - gen_sigs.mean(dim=0)) ** 2)
         
         return loss
+
+
+class DifferentiablePathLoss(nn.Module):
+    """
+    Differentiable path statistics loss for training.
+    
+    Unlike SigMMDLoss which uses numpy for signature computation,
+    this loss stays entirely in PyTorch to maintain gradient flow.
+    
+    Computes moment-based statistics on paths:
+    - Mean of increments
+    - Variance of increments  
+    - Higher moments (skew, kurtosis proxies)
+    - Autocorrelations
+    
+    Parameters
+    ----------
+    include_autocorr : bool
+        Whether to include autocorrelation statistics.
+    max_lag : int
+        Maximum lag for autocorrelation computation.
+    """
+    
+    def __init__(self, include_autocorr: bool = True, max_lag: int = 5):
+        super().__init__()
+        self.include_autocorr = include_autocorr
+        self.max_lag = max_lag
+    
+    def compute_statistics(self, paths: torch.Tensor) -> torch.Tensor:
+        """
+        Compute path statistics that characterize the distribution.
+        
+        Parameters
+        ----------
+        paths : torch.Tensor
+            Paths of shape (batch_size, n_steps+1) or (batch_size, n_steps+1, dim).
+        
+        Returns
+        -------
+        torch.Tensor
+            Statistics tensor of shape (n_stats,).
+        """
+        if paths.dim() == 2:
+            paths = paths.unsqueeze(-1)
+        
+        batch_size, n_steps_plus_1, dim = paths.shape
+        
+        # Compute increments
+        increments = paths[:, 1:, :] - paths[:, :-1, :]  # (batch, n_steps, dim)
+        n_steps = increments.shape[1]
+        
+        stats = []
+        
+        # Level 1: Mean of increments (should be ~0)
+        mean_inc = increments.mean(dim=(0, 1))  # (dim,)
+        stats.append(mean_inc)
+        
+        # Level 2: Variance of increments
+        var_inc = increments.var(dim=(0, 1))  # (dim,)
+        stats.append(var_inc)
+        
+        # Level 3: Third moment (skewness proxy)
+        centered = increments - increments.mean(dim=(0, 1), keepdim=True)
+        third_moment = (centered ** 3).mean(dim=(0, 1))  # (dim,)
+        stats.append(third_moment)
+        
+        # Level 4: Fourth moment (kurtosis proxy)
+        fourth_moment = (centered ** 4).mean(dim=(0, 1))  # (dim,)
+        stats.append(fourth_moment)
+        
+        # Cumulative path statistics
+        # Final value distribution
+        final_mean = paths[:, -1, :].mean(dim=0)  # (dim,)
+        final_var = paths[:, -1, :].var(dim=0)    # (dim,)
+        stats.extend([final_mean, final_var])
+        
+        # Autocorrelations (key for capturing temporal structure)
+        if self.include_autocorr:
+            for lag in range(1, min(self.max_lag + 1, n_steps)):
+                # Autocorrelation at this lag
+                inc1 = increments[:, :-lag, :].reshape(-1, dim)
+                inc2 = increments[:, lag:, :].reshape(-1, dim)
+                autocorr = (inc1 * inc2).mean(dim=0)  # (dim,)
+                stats.append(autocorr)
+        
+        return torch.cat(stats, dim=0)
+    
+    def forward(
+        self,
+        real_paths: torch.Tensor,
+        gen_paths: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Compute differentiable path statistics loss.
+        
+        Parameters
+        ----------
+        real_paths : torch.Tensor
+            Real paths.
+        gen_paths : torch.Tensor
+            Generated paths (must have gradients).
+        
+        Returns
+        -------
+        torch.Tensor
+            Scalar loss value with gradient connection.
+        """
+        # Compute statistics (real paths don't need gradients)
+        with torch.no_grad():
+            real_stats = self.compute_statistics(real_paths)
+        
+        # Generated paths need gradients
+        gen_stats = self.compute_statistics(gen_paths)
+        
+        # L2 loss between statistics
+        loss = torch.sum((real_stats - gen_stats) ** 2)
+        
+        return loss
+
