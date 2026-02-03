@@ -23,7 +23,7 @@ pip install -r requirements.txt
 
 ### Dependencies
 - Python ≥ 3.9
-- PyTorch ≥ 2.0
+- PyTorch == 2.2.0 (see requirements.txt)
 - NumPy, SciPy, Matplotlib
 - yfinance (for market data)
 
@@ -69,7 +69,7 @@ python src/validation/convergence_test.py --samples 100 --output figures/converg
 │   └── validation/            # Convergence analysis
 ├── notebooks/
 │   └── results.ipynb          # Visualizations and analysis
-├── tests/                     # Unit tests (43 tests)
+├── tests/                     # Unit tests (run `pytest tests/`)
 ├── docs/                      # Documentation
 └── train.py                   # Training script
 ```
@@ -80,6 +80,8 @@ python src/validation/convergence_test.py --samples 100 --output figures/converg
 fBM paths with $H=0.1$ exhibit the characteristic roughness observed in empirical volatility:
 
 ![fBM Comparison](figures/convergence_regimes.png)
+
+Observed convergence behavior under exact rough noise injection; the rough case exhibits non-classical convergence rates relative to standard Euler–Maruyama theory.
 
 ### Deep Hedging Performance
 
@@ -93,6 +95,8 @@ fBM paths with $H=0.1$ exhibit the characteristic roughness observed in empirica
 | Heston Delta | −0.773 | [−0.783, −0.761] | −1.417 | [−1.443, −1.389] |
 | Naive (δ=0.5) | −0.005 | [−0.007, −0.002] | −0.190 | [−0.203, −0.177] |
 | **Neural Hedge** | **−0.015** | [−0.020, −0.010] | **−0.430** | [−0.455, −0.404] |
+
+*The Neural hedge substantially reduces tail risk (CVaR) relative to classical delta hedging while maintaining near-zero mean PnL, indicating a deliberate trade-off favoring downside protection under rough volatility dynamics.*
 
 **Statistical significance (Neural vs BS):**
 - Mean PnL difference: +0.754, p < 0.001 ***
